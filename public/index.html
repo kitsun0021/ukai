@@ -312,18 +312,26 @@ const LS_KEY = 'wa.game.v1';
 let S, mode = 'local', saveTimer = null;
 const $ = s => document.querySelector(s);
 
+const fixup = () => { S.quests ??= []; S.exp ??= 0; S.player ??= freshState().player; };
 async function load(){
   try {
     const r = await fetch('api/state', { cache: 'no-store' });
-    if (r.ok || r.status === 204) {
-      mode = 'server';
-      S = r.status === 204 ? null : await r.json();
-    }
+    if (r.ok) { mode = 'server'; S = await r.json(); }
   } catch {}
   if (mode === 'local') { try { S = JSON.parse(localStorage.getItem(LS_KEY)); } catch { S = null; } }
   if (!S || !Array.isArray(S.stats)) { S = freshState(); save(); }
-  S.quests ??= []; S.exp ??= 0; S.player ??= freshState().player;
+  fixup();
   setSaveState(mode === 'server' ? 'SAVE ・ SERVER' : 'SAVE ・ BROWSER');
+}
+// サーバー側（Claude など）で変わっていたら取り込む。編集中・保存待ちのときは触らない
+async function refresh(){
+  if (mode !== 'server' || saveTimer || document.querySelector('dialog[open]') || document.hidden) return;
+  try {
+    const r = await fetch('api/state', { cache: 'no-store' });
+    if (!r.ok) return;
+    const next = await r.json();
+    if (next.rev !== S.rev && !saveTimer) { S = next; fixup(); render(); toast('最新の状態を読み込んだ'); }
+  } catch {}
 }
 function save(){
   clearTimeout(saveTimer);
@@ -332,10 +340,16 @@ function save(){
     const body = JSON.stringify(S);
     if (mode === 'server') {
       try {
-        const r = await fetch('api/state', { method:'PUT', headers:{'Content-Type':'application/json'}, body });
-        if (!r.ok) throw new Error(r.status);
-        setSaveState('SAVED ・ SERVER');
+        const r = await fetch('api/state', { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ rev: S.rev ?? 0, state: S }) });
+        if (r.status === 409) {
+          // 別の場所（Claude など）が先に書き換えていた。こちらの変更は捨てて最新を出す
+          S = (await r.json()).state; fixup(); render();
+          setSaveState('SAVE ・ SERVER');
+          toast('別の場所で更新されていたので、最新を読み込んだ。もう一度操作してほしい');
+        } else if (!r.ok) throw new Error(r.status);
+        else { S.rev = (await r.json()).rev; setSaveState('SAVED ・ SERVER'); }
       } catch { setSaveState('保存失敗 ・ SERVER', true); }
+      finally { saveTimer = null; }
     } else {
       try { localStorage.setItem(LS_KEY, body); setSaveState('SAVED ・ BROWSER'); }
       catch { setSaveState('保存失敗 ・ BROWSER', true); }
@@ -591,12 +605,17 @@ $('#importFile').onchange = async e => {
     const v = JSON.parse(await file.text());
     if (!Array.isArray(v.stats)) throw 0;
     if (!confirm('いまのデータを、このファイルの中身で置き換える？')) return;
-    S = v; S.quests ??= []; S.exp ??= 0; S.player ??= freshState().player;
+    v.rev = S.rev; S = v; fixup();
     ui.stat = null; save(); render(); toast('読み込んだ');
   } catch { toast('読み込めないファイルだ'); }
 };
 
-load().then(render);
+load().then(() => {
+  render();
+  setInterval(refresh, 15000);
+  document.addEventListener('visibilitychange', refresh);
+  window.addEventListener('focus', refresh);
+});
 </script>
 </body>
 </html>
