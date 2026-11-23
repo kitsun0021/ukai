@@ -1,0 +1,16 @@
+services:
+  wa:
+    build: .
+    image: ukai-wa:latest
+    container_name: ukai-wa
+    ports:
+      - "8080:8080"
+    volumes:
+      - wa-data:/data
+    environment:
+      # 設定すると /mcp に「Authorization: Bearer <この値>」が必要になる（.env に書く）
+      WA_MCP_TOKEN: ${WA_MCP_TOKEN:-}
+    restart: unless-stopped
+
+volumes:
+  wa-data:
