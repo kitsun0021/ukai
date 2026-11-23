@@ -1,0 +1,13 @@
+services:
+  wa:
+    build: .
+    image: ukai-wa:latest
+    container_name: ukai-wa
+    ports:
+      - "8080:8080"
+    volumes:
+      - wa-data:/data
+    restart: unless-stopped
+
+volumes:
+  wa-data:

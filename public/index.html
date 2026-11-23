@@ -1,0 +1,602 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#08090b">
+<title>輪 — STATUS</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#08090b; --win:rgba(14,13,14,.86); --edge:rgba(215,194,155,.55); --line:rgba(215,194,155,.16);
+  --text:#ece4d4; --muted:#8a8478; --gold:#c5a568; --hp:#c25b4e;
+  --physical:#d0906a; --brain:#7fb2cf; --mind:#a48fd6; --soul:#e2bd68;
+  --accent:var(--gold);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text)}
+body{font-family:"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif;min-height:100svh;overflow-x:hidden;
+  background:radial-gradient(ellipse at 30% 35%,#18130f 0%,#0c0b0c 45%,#08090b 80%)}
+button,input,select,textarea{font:inherit;color:inherit}
+.num{font-family:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+.grain{position:fixed;inset:-50%;opacity:.06;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  animation:grain .25s steps(2) infinite}
+@keyframes grain{0%{transform:translate(0,0)}50%{transform:translate(2%,-1%)}100%{transform:translate(-1%,2%)}}
+.wrap{position:relative;z-index:1;max-width:1280px;margin:0 auto;padding:18px clamp(16px,3vw,36px) 40px}
+
+/* ── ゲームウィンドウ ── */
+.win{position:relative;background:var(--win);border:1px solid var(--edge);border-radius:6px;padding:18px 18px 16px;
+  box-shadow:inset 0 0 0 3px var(--bg),inset 0 0 0 4px var(--line),0 10px 30px rgba(0,0,0,.45)}
+.win::before,.win::after{content:"";position:absolute;width:9px;height:9px;border:1px solid var(--accent);transform:rotate(45deg);background:var(--bg);top:-5px}
+.win::before{left:14px}.win::after{right:14px}
+.win-title{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:normal;letter-spacing:.32em;color:var(--accent)}
+.win-title .sp{flex:1;height:1px;background:var(--line)}
+.icon-btn{border:1px solid var(--line);background:none;border-radius:4px;padding:3px 9px;font-size:11px;letter-spacing:.15em;color:var(--muted);cursor:pointer}
+.icon-btn:hover,.icon-btn:focus-visible{color:var(--text);border-color:var(--accent);outline:none}
+
+/* ── プレイヤーバー ── */
+.hud{display:grid;grid-template-columns:auto 1fr;gap:14px 24px;align-items:center;margin-bottom:16px}
+.player{display:flex;align-items:center;gap:14px}
+.crest{width:48px;height:48px;border:1px solid var(--edge);border-radius:50%;display:grid;place-items:center;color:var(--gold);font-size:20px;box-shadow:0 0 18px rgba(197,165,104,.18)}
+.pname{font-size:20px;letter-spacing:.25em;background:none;border:0;padding:0;cursor:pointer;text-align:left}
+.ptitle{font-size:11px;color:var(--muted);letter-spacing:.2em;margin-top:2px}
+.lv{display:flex;align-items:center;gap:14px;min-width:0}
+.lv-badge{font-size:12px;letter-spacing:.2em;color:var(--muted);white-space:nowrap}
+.lv-badge b{font-size:26px;color:var(--gold);font-weight:normal;letter-spacing:0;margin-left:4px}
+.gauge{flex:1;min-width:80px}
+.gauge .lab{display:flex;justify-content:space-between;font-size:10px;letter-spacing:.2em;color:var(--muted);margin-bottom:4px}
+.gauge .track{height:8px;border:1px solid var(--line);border-radius:2px;background:rgba(255,255,255,.03);overflow:hidden}
+.gauge .fill{height:100%;background:linear-gradient(90deg,#8d6f3e,var(--gold));transition:width .6s}
+.save-state{font-size:10px;letter-spacing:.2em;color:var(--muted);white-space:nowrap}
+.save-state.err{color:var(--hp)}
+
+nav{grid-column:1/-1;display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.tab{flex:1;min-width:max-content;border:1px solid var(--line);background:var(--win);padding:9px 16px;border-radius:4px;cursor:pointer;
+  letter-spacing:.22em;font-size:12px;color:var(--muted);transition:all .2s}
+.tab small{display:block;font-size:10px;letter-spacing:.1em;opacity:.75;margin-top:2px}
+.tab:hover{color:var(--text)}
+.tab[aria-selected="true"]{color:var(--text);border-color:var(--accent);box-shadow:inset 0 -2px 0 var(--accent),0 0 14px color-mix(in srgb,var(--accent) 25%,transparent)}
+
+/* ── レイアウト ── */
+.grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:start}
+.col{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+/* ── 輪 ── */
+.stage{position:relative;aspect-ratio:1;width:100%;max-width:560px;margin:0 auto}
+.stage img{position:absolute;left:-2%;top:-6.5%;width:100%;height:100%;object-fit:contain;mix-blend-mode:screen;opacity:.9;
+  -webkit-mask-image:radial-gradient(circle at 52% 56%,#000 64%,transparent 76%);mask-image:radial-gradient(circle at 52% 56%,#000 64%,transparent 76%);
+  animation:breathe 9s ease-in-out infinite}
+@keyframes breathe{0%,100%{transform:scale(.985) rotate(-.4deg)}50%{transform:scale(1.015) rotate(.4deg)}}
+.stage svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.ring-bg{fill:none;stroke-width:3.2;opacity:.12}
+.ring-arc{fill:none;stroke-width:3.2;stroke-linecap:round;opacity:.35;transition:opacity .35s,stroke-dasharray .6s}
+.ring-arc.on{opacity:1;filter:drop-shadow(0 0 3px currentColor)}
+.ring-hit{fill:none;stroke:transparent;stroke-width:12;cursor:pointer;pointer-events:stroke}
+.ring-label{font-size:5px;letter-spacing:.35em;fill:var(--muted);pointer-events:none}
+.ring-label.on{fill:var(--text)}
+.mark{fill:none;stroke:var(--gold);stroke-linecap:round;stroke-linejoin:round;opacity:.55;animation:glow 5s ease-in-out infinite}
+@keyframes glow{0%,100%{opacity:.4}50%{opacity:.85}}
+
+/* ── ステータス ── */
+.stats{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.stat{display:grid;grid-template-columns:14px 1fr auto;gap:4px 10px;align-items:center;padding:8px 8px;border-radius:4px;cursor:pointer;border:1px solid transparent}
+.stat:hover,.stat:focus-visible{background:rgba(255,255,255,.035);outline:none}
+.stat .cur{color:var(--accent);font-size:11px;opacity:0}
+.stat[aria-current="true"]{border-color:var(--line);background:rgba(255,255,255,.05)}
+.stat[aria-current="true"] .cur{opacity:1;animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.stat .nm{font-size:14px;letter-spacing:.14em;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stat .nm small{font-size:10px;color:var(--muted);letter-spacing:.15em;margin-left:8px}
+.stat .v{font-size:13px}
+.stat .v span{color:var(--muted);font-size:11px}
+.stat .bar{grid-column:2/4;position:relative;height:6px;background:rgba(255,255,255,.05);border-radius:1px}
+.stat .bar i{position:absolute;inset:0 auto 0 0;border-radius:1px;transition:width .5s}
+.stat .bar u{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--text);opacity:.7;text-decoration:none}
+.empty{color:var(--muted);font-size:13px;line-height:1.9;padding:6px 4px}
+
+/* ── レーダー ── */
+.radar{width:100%;max-width:330px;display:block;margin:0 auto;overflow:visible}
+.radar .web{fill:none;stroke:var(--line)}
+.radar .axis{stroke:var(--line)}
+.radar .tgt{fill:none;stroke:var(--text);stroke-opacity:.45;stroke-dasharray:3 3}
+.radar .shape{fill:var(--accent);fill-opacity:.2;stroke:var(--accent);stroke-width:1.5}
+.radar text{font-size:9px;fill:var(--muted);letter-spacing:.1em}
+.legend{display:flex;gap:16px;justify-content:center;font-size:10px;color:var(--muted);letter-spacing:.15em;margin-top:4px}
+.legend i{display:inline-block;width:14px;height:0;border-top:2px solid var(--accent);vertical-align:middle;margin-right:6px}
+.legend i.t{border-top:1px dashed var(--text)}
+
+/* ── 詳細 ── */
+.d-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.d-head h3{margin:0;font-size:24px;font-weight:normal;letter-spacing:.18em}
+.d-head span{color:var(--muted);font-size:12px;letter-spacing:.2em}
+.goal{margin:12px 0 14px;padding:10px 12px;border-left:2px solid var(--accent);background:rgba(255,255,255,.03);font-size:14px;line-height:1.8;color:#cfc6b5;white-space:pre-wrap}
+.goal.none{color:var(--muted)}
+.bars{display:flex;align-items:flex-end;gap:4px;height:100px;border-bottom:1px solid var(--line)}
+.bars div{flex:1;height:100%;display:flex;align-items:flex-end}
+.bars i{display:block;width:100%;background:var(--accent);opacity:.7;border-radius:2px 2px 0 0;min-height:2px}
+.bars i.no{background:rgba(255,255,255,.06);opacity:1}
+.bars div.today i{opacity:1;box-shadow:0 0 8px var(--accent)}
+.days{display:flex;gap:4px;margin-top:5px}.days span{flex:1;text-align:center;font-size:9px;color:var(--muted)}
+.rec{display:flex;align-items:center;gap:12px;margin-top:14px;flex-wrap:wrap}
+.rec label{font-size:11px;letter-spacing:.2em;color:var(--muted)}
+.rec input[type=range]{flex:1;min-width:120px;accent-color:var(--accent)}
+.rec output{min-width:3ch;text-align:right;font-size:18px;color:var(--accent)}
+
+/* ── クエスト ── */
+.quests{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.quest{display:grid;grid-template-columns:22px 1fr auto;gap:2px 10px;align-items:start;padding:9px 10px;border:1px solid var(--line);border-radius:4px;background:rgba(255,255,255,.02)}
+.quest .chk{width:18px;height:18px;margin-top:2px;border:1px solid var(--edge);border-radius:3px;background:none;cursor:pointer;display:grid;place-items:center;font-size:12px;color:var(--bg);padding:0}
+.quest.done .chk{background:var(--accent);border-color:var(--accent)}
+.quest .qt{font-size:14px;letter-spacing:.06em;line-height:1.6;word-break:break-word}
+.quest.done .qt{color:var(--muted);text-decoration:line-through}
+.quest .meta{grid-column:2/4;display:flex;gap:10px;flex-wrap:wrap;font-size:10px;letter-spacing:.15em;color:var(--muted)}
+.quest .meta b{font-weight:normal;color:var(--accent)}
+.qfilter{display:flex;gap:6px;margin-bottom:10px}
+.qfilter button[aria-pressed="true"]{color:var(--text);border-color:var(--accent)}
+
+.btn{border:1px solid var(--edge);background:rgba(255,255,255,.04);border-radius:4px;padding:8px 16px;cursor:pointer;letter-spacing:.18em;font-size:12px}
+.btn:hover,.btn:focus-visible{background:color-mix(in srgb,var(--accent) 22%,transparent);outline:none}
+.btn.primary{background:var(--accent);color:#120f0c;border-color:transparent}
+.btn.danger{border-color:var(--hp);color:#e7a49a}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+
+/* ── ダイアログ ── */
+dialog{border:0;padding:0;background:none;color:var(--text);width:min(520px,calc(100vw - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.65);backdrop-filter:blur(3px)}
+dialog .win{padding:22px}
+.form{display:grid;gap:12px}
+.form label{display:grid;gap:5px;font-size:11px;letter-spacing:.2em;color:var(--muted)}
+.form input,.form select,.form textarea{background:rgba(0,0,0,.4);border:1px solid var(--line);border-radius:4px;padding:9px 10px;font-size:14px;letter-spacing:.04em}
+.form input:focus,.form select:focus,.form textarea:focus{outline:none;border-color:var(--accent)}
+.form textarea{min-height:84px;resize:vertical;line-height:1.7}
+.form .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.form .acts{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:6px}
+.form .acts .sp{flex:1}
+
+/* ── トースト ── */
+.toast{position:fixed;left:50%;bottom:28px;transform:translate(-50%,20px);opacity:0;pointer-events:none;z-index:50;
+  background:var(--win);border:1px solid var(--accent);border-radius:4px;padding:12px 20px;letter-spacing:.15em;font-size:13px;transition:all .35s;
+  box-shadow:0 0 24px color-mix(in srgb,var(--accent) 35%,transparent)}
+.toast.show{opacity:1;transform:translate(-50%,0)}
+
+footer{margin-top:24px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--muted);font-size:11px;letter-spacing:.2em;align-items:center}
+footer .row{margin:0}
+
+@media (max-width:920px){
+  .grid{grid-template-columns:minmax(0,1fr)}
+  .hud{grid-template-columns:1fr}
+  .tab{min-width:0;padding:8px 4px;letter-spacing:.06em;font-size:11px}
+  nav{gap:4px}
+  .form .two{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<div class="wrap">
+  <div class="hud">
+    <div class="player">
+      <div class="crest" aria-hidden="true">✳</div>
+      <div>
+        <button class="pname" id="pname" type="button" title="名前と称号を変える"></button>
+        <div class="ptitle" id="ptitle"></div>
+      </div>
+    </div>
+    <div class="lv">
+      <div class="lv-badge">LV<b class="num" id="lv">1</b></div>
+      <div class="gauge">
+        <div class="lab"><span>EXP</span><span class="num" id="expTxt"></span></div>
+        <div class="track"><div class="fill" id="expFill"></div></div>
+      </div>
+      <div class="save-state" id="saveState"></div>
+    </div>
+    <nav role="tablist" aria-label="層" id="tabs"></nav>
+  </div>
+
+  <div class="grid">
+    <div class="col">
+      <div class="stage"><img src="assets/ouroboros.jpg" alt="自分の尾を噛む蛇の輪"><svg viewBox="0 0 200 200" id="rings"></svg></div>
+      <section class="win" id="detail" aria-live="polite"></section>
+    </div>
+    <div class="col">
+      <section class="win">
+        <h2 class="win-title"><span id="statTitle">STATUS</span><span class="sp"></span><button class="icon-btn" id="addStat" type="button">＋ 項目</button></h2>
+        <ul class="stats" id="stats"></ul>
+      </section>
+      <section class="win">
+        <h2 class="win-title">QUESTS ・ やりたいこと<span class="sp"></span><button class="icon-btn" id="addQuest" type="button">＋ 追加</button></h2>
+        <div class="qfilter">
+          <button class="icon-btn" data-f="open" type="button">未達成</button>
+          <button class="icon-btn" data-f="done" type="button">達成済み</button>
+          <button class="icon-btn" data-f="all" type="button">すべて</button>
+        </div>
+        <ul class="quests" id="quests"></ul>
+      </section>
+      <section class="win">
+        <h2 class="win-title">BALANCE<span class="sp"></span></h2>
+        <svg class="radar" id="radar" viewBox="-40 -24 280 248"></svg>
+        <div class="legend"><span><i></i>いま</span><span><i class="t"></i>目標</span></div>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <span>私の主人は私だ。私の神は私だ。</span>
+    <span class="row">
+      <button class="btn" id="exportBtn" type="button">書き出す</button>
+      <button class="btn" id="importBtn" type="button">読み込む</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </span>
+  </footer>
+</div>
+
+<!-- 項目の編集 -->
+<dialog id="statDlg"><form class="win form" method="dialog" id="statForm">
+  <h2 class="win-title" id="statDlgTitle">項目</h2>
+  <div class="two">
+    <label>名前<input name="name" required maxlength="24" placeholder="例：FOCUS"></label>
+    <label>よみ・メモ<input name="sub" maxlength="24" placeholder="例：集中"></label>
+  </div>
+  <div class="two">
+    <label>層<select name="layer"></select></label>
+    <label>目標値（0〜100）<input name="target" type="number" min="0" max="100" step="1" required></label>
+  </div>
+  <label>伸ばしたいこと・目標<textarea name="goal" maxlength="600" placeholder="どうなりたい？ なぜ伸ばしたい？"></textarea></label>
+  <div class="acts">
+    <button class="btn danger" value="delete" id="statDel" type="submit" formnovalidate>削除</button><span class="sp"></span>
+    <button class="btn" value="cancel" type="submit" formnovalidate>やめる</button>
+    <button class="btn primary" value="ok" type="submit">保存</button>
+  </div>
+</form></dialog>
+
+<!-- クエストの編集 -->
+<dialog id="questDlg"><form class="win form" method="dialog" id="questForm">
+  <h2 class="win-title" id="questDlgTitle">クエスト</h2>
+  <label>やりたいこと<input name="title" required maxlength="80" placeholder="例：BGP を実機で組んでみる"></label>
+  <div class="two">
+    <label>層<select name="layer"></select></label>
+    <label>伸びる項目<select name="stat"></select></label>
+  </div>
+  <div class="two">
+    <label>獲得 EXP<input name="exp" type="number" min="0" max="1000" step="5" required></label>
+    <label>項目の上昇値<input name="boost" type="number" min="0" max="20" step="1" required></label>
+  </div>
+  <label>メモ<textarea name="note" maxlength="600" placeholder="条件、期限、やり方など"></textarea></label>
+  <div class="acts">
+    <button class="btn danger" value="delete" id="questDel" type="submit" formnovalidate>削除</button><span class="sp"></span>
+    <button class="btn" value="cancel" type="submit" formnovalidate>やめる</button>
+    <button class="btn primary" value="ok" type="submit">保存</button>
+  </div>
+</form></dialog>
+
+<!-- プレイヤー -->
+<dialog id="playerDlg"><form class="win form" method="dialog" id="playerForm">
+  <h2 class="win-title">PLAYER</h2>
+  <label>名前<input name="name" required maxlength="24"></label>
+  <label>称号<input name="title" maxlength="40"></label>
+  <div class="acts"><button class="btn" value="cancel" type="submit" formnovalidate>やめる</button><button class="btn primary" value="ok" type="submit">保存</button></div>
+</form></dialog>
+
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+/* ═════════ 層（固定） ═════════ */
+const LAYERS = [
+  {id:'physical', en:'PHYSICAL', ja:'体', r:66, color:'--physical'},
+  {id:'brain',    en:'BRAIN',    ja:'脳', r:52, color:'--brain'},
+  {id:'mind',     en:'MIND',     ja:'心', r:38, color:'--mind'},
+  {id:'soul',     en:'SOUL',     ja:'魂', r:24, color:'--soul'},
+];
+const layerOf = id => LAYERS.find(l => l.id === id);
+
+/* ═════════ 初期データ ═════════ */
+const uid = () => Math.random().toString(36).slice(2, 10);
+const seedStats = [
+  ['physical','SKIN','肌'],['physical','EYE','目'],['physical','NOSE','鼻'],['physical','WEIGHT','体重'],['physical','SLEEP','睡眠'],
+  ['brain','FOCUS','集中'],['brain','LEARN','学び'],['brain','READ','読書'],['brain','CREATE','創造'],
+  ['mind','MOOD','気分'],['mind','CALM','平静'],['mind','DRIVE','意欲'],['mind','BOND','つながり'],
+  ['soul','WILL','意志'],['soul','FREE','自由'],['soul','BORDER','境界線'],['soul','MEANING','意味'],
+];
+const freshState = () => ({
+  version: 1,
+  player: { name: 'LUCIFER', title: '自分の頭で考え、自分の意志で選ぶ者' },
+  exp: 0,
+  stats: seedStats.map(([layer,name,sub]) => ({ id: uid(), layer, name, sub, value: 0, target: 60, goal: '', log: {} })),
+  quests: [],
+});
+
+/* ═════════ 保存（サーバー優先・なければブラウザ） ═════════ */
+const LS_KEY = 'wa.game.v1';
+let S, mode = 'local', saveTimer = null;
+const $ = s => document.querySelector(s);
+
+async function load(){
+  try {
+    const r = await fetch('api/state', { cache: 'no-store' });
+    if (r.ok || r.status === 204) {
+      mode = 'server';
+      S = r.status === 204 ? null : await r.json();
+    }
+  } catch {}
+  if (mode === 'local') { try { S = JSON.parse(localStorage.getItem(LS_KEY)); } catch { S = null; } }
+  if (!S || !Array.isArray(S.stats)) { S = freshState(); save(); }
+  S.quests ??= []; S.exp ??= 0; S.player ??= freshState().player;
+  setSaveState(mode === 'server' ? 'SAVE ・ SERVER' : 'SAVE ・ BROWSER');
+}
+function save(){
+  clearTimeout(saveTimer);
+  setSaveState('…');
+  saveTimer = setTimeout(async () => {
+    const body = JSON.stringify(S);
+    if (mode === 'server') {
+      try {
+        const r = await fetch('api/state', { method:'PUT', headers:{'Content-Type':'application/json'}, body });
+        if (!r.ok) throw new Error(r.status);
+        setSaveState('SAVED ・ SERVER');
+      } catch { setSaveState('保存失敗 ・ SERVER', true); }
+    } else {
+      try { localStorage.setItem(LS_KEY, body); setSaveState('SAVED ・ BROWSER'); }
+      catch { setSaveState('保存失敗 ・ BROWSER', true); }
+    }
+  }, 300);
+}
+function setSaveState(t, err){ const e = $('#saveState'); e.textContent = t; e.classList.toggle('err', !!err); }
+
+/* ═════════ 計算 ═════════ */
+const dayKey = d => { const z = new Date(d); z.setMinutes(z.getMinutes() - z.getTimezoneOffset()); return z.toISOString().slice(0,10); };
+const TODAY = () => dayKey(new Date());
+const lastDays = n => Array.from({length:n}, (_,i) => { const d = new Date(); d.setDate(d.getDate() - (n-1-i)); return dayKey(d); });
+const clamp = (v,a=0,b=100) => Math.max(a, Math.min(b, v));
+const avg = a => a.length ? a.reduce((x,y)=>x+y,0)/a.length : 0;
+const statsIn = layer => S.stats.filter(s => s.layer === layer);
+const layerScore = L => avg(statsIn(L.id).map(s => s.value));
+const layerTarget = L => avg(statsIn(L.id).map(s => s.target));
+// LV n に必要な累計EXP = 50·n·(n-1)
+const expFor = lv => 50 * lv * (lv - 1);
+const levelOf = exp => { let lv = 1; while (expFor(lv + 1) <= exp) lv++; return lv; };
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const NS = 'http://www.w3.org/2000/svg';
+const el = (tag, attrs={}, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; };
+
+/* ═════════ UI 状態 ═════════ */
+let ui = { tab:'start', stat:null, qf:'open' };
+try { Object.assign(ui, JSON.parse(localStorage.getItem('wa.ui.v2')) || {}); } catch {}
+const saveUi = () => { try { localStorage.setItem('wa.ui.v2', JSON.stringify(ui)); } catch {} };
+const curStat = () => S.stats.find(s => s.id === ui.stat);
+
+function select(tab, statId){
+  ui.tab = tab;
+  if (statId !== undefined) ui.stat = statId;
+  else if (tab !== 'start' && curStat()?.layer !== tab) ui.stat = statsIn(tab)[0]?.id ?? null;
+  saveUi(); render();
+}
+
+function toast(msg){ const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove('show'), 2200); }
+
+/* ═════════ 描画 ═════════ */
+function renderHud(){
+  $('#pname').textContent = S.player.name;
+  $('#ptitle').textContent = S.player.title || '';
+  const lv = levelOf(S.exp), a = expFor(lv), b = expFor(lv + 1);
+  $('#lv').textContent = lv;
+  $('#expTxt').textContent = `${S.exp - a} / ${b - a}  NEXT`;
+  $('#expFill').style.width = `${(S.exp - a) / (b - a) * 100}%`;
+  const nav = $('#tabs'); nav.innerHTML = '';
+  [{id:'start',en:'START',ja:'全体'}, ...LAYERS].forEach(t => {
+    const b = document.createElement('button');
+    b.className = 'tab'; b.type = 'button'; b.setAttribute('role','tab');
+    b.setAttribute('aria-selected', ui.tab === t.id);
+    b.innerHTML = `${t.en}<small>${t.ja}</small>`;
+    b.onclick = () => select(t.id);
+    nav.appendChild(b);
+  });
+}
+
+function renderRings(){
+  const svg = $('#rings'); svg.innerHTML = '';
+  const defs = el('defs', {}, svg);
+  LAYERS.forEach(L => {
+    const on = ui.tab === 'start' || ui.tab === L.id, c = css(L.color), C = 2*Math.PI*L.r;
+    el('circle', {cx:100, cy:100, r:L.r, class:'ring-bg', stroke:c}, svg);
+    // 弧の長さ = その層の平均値
+    el('circle', {cx:100, cy:100, r:L.r, class:'ring-arc'+(on?' on':''), stroke:c, style:`color:${c}`,
+      'stroke-dasharray':`${C*layerScore(L)/100} ${C}`, transform:'rotate(-90 100 100)'}, svg);
+    el('path', {id:'lp-'+L.id, d:`M ${100-L.r+4} 100 A ${L.r-4} ${L.r-4} 0 0 1 ${100+L.r-4} 100`, fill:'none'}, defs);
+    const t = el('text', {class:'ring-label'+(on?' on':'')}, svg);
+    el('textPath', {href:'#lp-'+L.id, startOffset:'50%', 'text-anchor':'middle'}, t).textContent = `${L.en} ${Math.round(layerScore(L))}`;
+    const hit = el('circle', {cx:100, cy:100, r:L.r, class:'ring-hit'}, svg);
+    el('title', {}, hit).textContent = `${L.en} ・ ${L.ja}`;
+    hit.addEventListener('click', () => select(L.id));
+  });
+  const g = el('g', {transform:'translate(100 100) scale(.1) translate(-100 -120)', class:'mark'}, svg);
+  el('path', {'stroke-width':11, d:'M100 18 L100 64 M100 64 C100 94 72 115 44 143 C26 161 37 187 62 187 C81 187 91 173 100 157 C109 173 119 187 138 187 C163 187 174 161 156 143 C128 115 100 94 100 64 M45 143 L155 143 M100 157 L100 218 M76 214 Q100 232 124 214'}, g);
+}
+
+function renderStats(){
+  const ul = $('#stats'); ul.innerHTML = '';
+  const start = ui.tab === 'start';
+  $('#statTitle').textContent = start ? 'STATUS ・ 層' : `STATUS ・ ${layerOf(ui.tab).en}`;
+  const rows = start
+    ? LAYERS.map(L => ({id:L.id, name:L.en, sub:L.ja, value:layerScore(L), target:layerTarget(L), color:css(L.color), go:()=>select(L.id)}))
+    : statsIn(ui.tab).map(s => ({...s, color:css(layerOf(s.layer).color), go:()=>select(ui.tab, s.id), cur: s.id === ui.stat}));
+  if (!rows.length) { ul.innerHTML = `<li class="empty">まだ項目がない。「＋ 項目」から、この層で測りたいものを足したまえ。</li>`; return; }
+  rows.forEach(r => {
+    const li = document.createElement('li'); li.className = 'stat'; li.tabIndex = 0;
+    li.setAttribute('aria-current', !!r.cur);
+    li.innerHTML = `<span class="cur">▶</span><span class="nm">${esc(r.name)}<small>${esc(r.sub)}</small></span>
+      <span class="v num">${Math.round(r.value)}<span> / ${Math.round(r.target)}</span></span>
+      <span class="bar"><i style="width:${r.value}%;background:${r.color}"></i><u style="left:calc(${r.target}% - 1px)"></u></span>`;
+    li.onclick = r.go; li.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); r.go(); } };
+    ul.appendChild(li);
+  });
+}
+
+function renderRadar(){
+  const svg = $('#radar'); svg.innerHTML = '';
+  const axes = ui.tab === 'start'
+    ? LAYERS.map(L => ({label:L.en, v:layerScore(L), t:layerTarget(L)}))
+    : statsIn(ui.tab).map(s => ({label:s.name, v:s.value, t:s.target}));
+  if (axes.length < 3) { const t = el('text',{x:100,y:100,'text-anchor':'middle'},svg); t.textContent = '項目が 3 つ以上あると描ける'; return; }
+  const n = axes.length, R = 80, pt = (i,r) => { const a = -Math.PI/2 + i*2*Math.PI/n; return [100 + r*Math.cos(a), 100 + r*Math.sin(a)]; };
+  [20,40,60,80,100].forEach(s => el('polygon',{class:'web', points:axes.map((_,i)=>pt(i,R*s/100).join(',')).join(' ')},svg));
+  axes.forEach((a,i) => {
+    const [x,y] = pt(i,R); el('line',{class:'axis',x1:100,y1:100,x2:x,y2:y},svg);
+    const [lx,ly] = pt(i,R+13);
+    el('text',{x:lx,y:ly+3,'text-anchor':Math.abs(lx-100)<4?'middle':(lx>100?'start':'end')},svg).textContent = a.label.length > 10 ? a.label.slice(0,9)+'…' : a.label;
+  });
+  el('polygon',{class:'tgt', points:axes.map((a,i)=>pt(i,R*a.t/100).join(',')).join(' ')},svg);
+  el('polygon',{class:'shape', points:axes.map((a,i)=>pt(i,R*a.v/100).join(',')).join(' ')},svg);
+}
+
+function renderDetail(){
+  const box = $('#detail'), s = ui.tab !== 'start' && curStat();
+  if (!s) {
+    const open = S.quests.filter(q => !q.done).length, done = S.quests.length - open;
+    box.innerHTML = `<h2 class="win-title">輪 ・ A LIVING CIRCLE<span class="sp"></span></h2>
+      <p class="goal none">外側から 体 → 脳 → 心 → 魂。輪の弧の長さが、その層のいまの値。
+タブか輪を選ぶと項目が並ぶ。項目は自分で足して、名前も目標も好きに書き換えられる。
+やりたいことは QUEST に書いて、達成すると EXP と項目の値が伸びる。</p>
+      <div class="bars">${LAYERS.map(L=>`<div title="${L.en} ${Math.round(layerScore(L))}"><i class="${layerScore(L)?'':'no'}" style="height:${layerScore(L)}%;background:${css(L.color)}"></i></div>`).join('')}</div>
+      <div class="days">${LAYERS.map(L=>`<span>${L.ja}</span>`).join('')}</div>
+      <div class="row" style="justify-content:space-between;color:var(--muted);font-size:12px;letter-spacing:.15em"><span>QUEST 未達成 <b class="num" style="color:var(--gold)">${open}</b></span><span>達成済み <b class="num" style="color:var(--gold)">${done}</b></span><span>項目 <b class="num" style="color:var(--gold)">${S.stats.length}</b></span></div>`;
+    return;
+  }
+  const L = layerOf(s.layer), days = lastDays(14), today = TODAY();
+  box.innerHTML = `
+    <h2 class="win-title">${L.en} ・ ${L.ja}<span class="sp"></span><button class="icon-btn" id="editStat" type="button">編集</button></h2>
+    <div class="d-head"><h3>${esc(s.name)}</h3><span>${esc(s.sub)}</span><span class="num" style="margin-left:auto;color:var(--text);font-size:16px">${s.value}<span style="color:var(--muted);font-size:12px"> / ${s.target}</span></span></div>
+    <div class="goal ${s.goal?'':'none'}">${s.goal ? esc(s.goal) : '伸ばしたいこと・目標はまだ書いていない。「編集」から書ける。'}</div>
+    <div class="bars">${days.map(d => { const v = s.log?.[d]; return `<div class="${d===today?'today':''}" title="${d} : ${v ?? '記録なし'}"><i class="${v==null?'no':''}" style="height:${v ?? 0}%"></i></div>`; }).join('')}</div>
+    <div class="days">${days.map(d => `<span>${+d.slice(8)}</span>`).join('')}</div>
+    <div class="rec">
+      <label for="val">TODAY</label>
+      <input type="range" id="val" min="0" max="100" step="1" value="${s.value}">
+      <output id="valOut" class="num">${s.value}</output>
+      <button class="btn primary" id="rec" type="button">記録する</button>
+    </div>`;
+  const inp = $('#val'), out = $('#valOut');
+  inp.oninput = () => out.textContent = inp.value;
+  $('#rec').onclick = () => { s.value = +inp.value; (s.log ??= {})[today] = s.value; save(); render(); toast(`${s.name} を ${s.value} で記録した`); };
+  $('#editStat').onclick = () => openStat(s);
+}
+
+function renderQuests(){
+  document.querySelectorAll('.qfilter button').forEach(b => b.setAttribute('aria-pressed', b.dataset.f === ui.qf));
+  const ul = $('#quests'); ul.innerHTML = '';
+  let qs = S.quests.filter(q => ui.tab === 'start' || q.layer === ui.tab);
+  qs = qs.filter(q => ui.qf === 'all' || (ui.qf === 'done') === !!q.done);
+  qs.sort((a,b) => (a.done - b.done) || ((b.doneAt||'').localeCompare(a.doneAt||'')));
+  if (!qs.length) { ul.innerHTML = `<li class="empty">${ui.qf==='done'?'達成したクエストはまだない。':'やりたいことを「＋ 追加」から書きたまえ。'}</li>`; return; }
+  qs.forEach(q => {
+    const L = layerOf(q.layer), st = S.stats.find(s => s.id === q.stat);
+    const li = document.createElement('li'); li.className = 'quest' + (q.done ? ' done' : '');
+    li.style.setProperty('--accent', css(L.color));
+    li.innerHTML = `<button class="chk" type="button" aria-label="${q.done?'未達成に戻す':'達成'}">${q.done?'✓':''}</button>
+      <span class="qt">${esc(q.title)}</span><button class="icon-btn" type="button">編集</button>
+      <span class="meta"><span>${L.en}</span><span>EXP <b class="num">+${q.exp}</b></span>${st?`<span>${esc(st.name)} <b class="num">+${q.boost}</b></span>`:''}${q.done&&q.doneAt?`<span>${q.doneAt} 達成</span>`:''}</span>`;
+    const [chk, edit] = li.querySelectorAll('button');
+    chk.onclick = () => toggleQuest(q);
+    edit.onclick = () => openQuest(q);
+    ul.appendChild(li);
+  });
+}
+
+function toggleQuest(q){
+  const st = S.stats.find(s => s.id === q.stat), before = levelOf(S.exp), sign = q.done ? -1 : 1;
+  q.done = !q.done; q.doneAt = q.done ? TODAY() : null;
+  S.exp = Math.max(0, S.exp + sign * (q.exp || 0));
+  if (st && q.boost) { st.value = clamp(st.value + sign * q.boost); (st.log ??= {})[TODAY()] = st.value; }
+  save(); render();
+  const after = levelOf(S.exp);
+  if (q.done) toast(after > before ? `LEVEL UP!  LV ${after}` : `QUEST CLEAR  EXP +${q.exp}${st&&q.boost?`  ${st.name} +${q.boost}`:''}`);
+}
+
+function render(){
+  const L = layerOf(ui.tab);
+  document.documentElement.style.setProperty('--accent', L ? css(L.color) : css('--gold'));
+  renderHud(); renderRings(); renderStats(); renderRadar(); renderDetail(); renderQuests();
+}
+
+/* ═════════ ダイアログ ═════════ */
+const layerOptions = sel => LAYERS.map(L => `<option value="${L.id}"${L.id===sel?' selected':''}>${L.en} ・ ${L.ja}</option>`).join('');
+
+function openStat(s){
+  const f = $('#statForm'), isNew = !s;
+  $('#statDlgTitle').textContent = isNew ? '項目を追加' : '項目を編集';
+  f.layer.innerHTML = layerOptions(s?.layer ?? (ui.tab === 'start' ? 'physical' : ui.tab));
+  f.name.value = s?.name ?? ''; f.sub.value = s?.sub ?? ''; f.target.value = s?.target ?? 60; f.goal.value = s?.goal ?? '';
+  $('#statDel').hidden = isNew;
+  $('#statDlg').onclose = () => {
+    const r = $('#statDlg').returnValue;
+    if (r === 'delete' && s && confirm(`「${s.name}」を消す？ 記録も消える。`)) {
+      S.stats = S.stats.filter(x => x !== s); S.quests.forEach(q => { if (q.stat === s.id) q.stat = null; });
+      ui.stat = null; save(); render(); return;
+    }
+    if (r !== 'ok') return;
+    const v = { name: f.name.value.trim(), sub: f.sub.value.trim(), layer: f.layer.value, target: clamp(+f.target.value || 0), goal: f.goal.value.trim() };
+    if (isNew) { const n = { id: uid(), value: 0, log: {}, ...v }; S.stats.push(n); ui.tab = n.layer; ui.stat = n.id; }
+    else { Object.assign(s, v); if (ui.tab !== 'start') ui.tab = s.layer; }
+    saveUi(); save(); render();
+  };
+  $('#statDlg').returnValue = ''; $('#statDlg').showModal();
+}
+
+function openQuest(q){
+  const f = $('#questForm'), isNew = !q;
+  $('#questDlgTitle').textContent = isNew ? 'クエストを追加' : 'クエストを編集';
+  const fillStats = (layer, sel) => {
+    f.stat.innerHTML = `<option value="">（なし）</option>` + statsIn(layer).map(s => `<option value="${s.id}"${s.id===sel?' selected':''}>${esc(s.name)} ${esc(s.sub)}</option>`).join('');
+  };
+  const layer = q?.layer ?? (ui.tab === 'start' ? 'physical' : ui.tab);
+  f.layer.innerHTML = layerOptions(layer);
+  fillStats(layer, q?.stat ?? (isNew && curStat()?.layer === layer ? ui.stat : null));
+  f.layer.onchange = () => fillStats(f.layer.value, null);
+  f.title.value = q?.title ?? ''; f.exp.value = q?.exp ?? 30; f.boost.value = q?.boost ?? 3; f.note.value = q?.note ?? '';
+  $('#questDel').hidden = isNew;
+  $('#questDlg').onclose = () => {
+    const r = $('#questDlg').returnValue;
+    if (r === 'delete' && q && confirm(`「${q.title}」を消す？`)) { S.quests = S.quests.filter(x => x !== q); save(); render(); return; }
+    if (r !== 'ok') return;
+    const v = { title: f.title.value.trim(), layer: f.layer.value, stat: f.stat.value || null,
+      exp: clamp(+f.exp.value || 0, 0, 1000), boost: clamp(+f.boost.value || 0, 0, 20), note: f.note.value.trim() };
+    if (isNew) S.quests.push({ id: uid(), done: false, doneAt: null, ...v });
+    else Object.assign(q, v); // 達成済みを編集しても EXP は付け直さない
+    save(); render();
+  };
+  $('#questDlg').returnValue = ''; $('#questDlg').showModal();
+}
+
+/* ═════════ イベント ═════════ */
+$('#addStat').onclick = () => openStat(null);
+$('#addQuest').onclick = () => openQuest(null);
+document.querySelectorAll('.qfilter button').forEach(b => b.onclick = () => { ui.qf = b.dataset.f; saveUi(); renderQuests(); });
+$('#pname').onclick = () => {
+  const f = $('#playerForm'); f.name.value = S.player.name; f.title.value = S.player.title || '';
+  $('#playerDlg').onclose = () => { if ($('#playerDlg').returnValue !== 'ok') return; S.player = { name: f.name.value.trim(), title: f.title.value.trim() }; save(); render(); };
+  $('#playerDlg').returnValue = ''; $('#playerDlg').showModal();
+};
+$('#exportBtn').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(S, null, 2)], {type:'application/json'}));
+  a.download = `wa-${TODAY()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('#importBtn').onclick = () => $('#importFile').click();
+$('#importFile').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  try {
+    const v = JSON.parse(await file.text());
+    if (!Array.isArray(v.stats)) throw 0;
+    if (!confirm('いまのデータを、このファイルの中身で置き換える？')) return;
+    S = v; S.quests ??= []; S.exp ??= 0; S.player ??= freshState().player;
+    ui.stat = null; save(); render(); toast('読み込んだ');
+  } catch { toast('読み込めないファイルだ'); }
+};
+
+load().then(render);
+</script>
+</body>
+</html>
